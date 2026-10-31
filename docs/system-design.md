@@ -363,7 +363,9 @@ for "HTTP Methods" from one LAN device, six were LAN-only "Max Ping Size" rows, 
 inbound. Alerting on all of them would have sent about 22 alert-and-note pairs that day. The
 whole-branch review then found that a blank Action, which the IP-reputation rows on dropped
 probes carry, is no evidence of enforcement and the likeliest flood, hence the explicit list.
-The Spark's system log lines (`<stamp> <tag>: <text>`, forwarded since 2026-10-28) parse as
+Since D13 an inbound detection is also quiet when its source is already in the feed or when
+the protection is an IP-reputation verdict alone: the gateway's own block of a known scanner,
+hundreds a day. The Spark's system log lines (`<stamp> <tag>: <text>`, forwarded since 2026-10-28) parse as
 `{"received", "tag", "system"}` with no key="value" pairs and never alert.
 
 An alert is one message. A feed alert reads `HH:MM:SS — <device> tried to reach <indicator>
@@ -963,6 +965,35 @@ Discussions reworded in the same hour on the owner's word. The workflow reads th
 missing, the old one, so the monthly run of 2026-11-01 is unaffected; the owner adds the new
 secret under Settings → Secrets and variables → Actions and deletes the old one at leisure.
 
+### D13. Inbound reputation blocks and feed members do not alert live (decided and built 2026-10-31)
+
+**Problem.** On 2026-10-31 the owner asked whether the house was under attack: the bot had
+sent dozens of alerts through the night, each with a note. The capture showed about 160
+inbound connections an hour, steady since midnight, blocked by the Anti-Malware blade's
+IP-reputation protection, almost all from one scanner range that has been in the feed as an
+`IP Range` row since 2026-10-20, plus two single hosts. Nothing had passed and no device inside
+had reached anything. The alert rule as built under D6 alerts on any Threat Prevention row with
+an enforcing action and a public address, once an hour per source, destination and protection;
+a range with some fifty live hosts therefore produced some fifty alert-and-note pairs an hour,
+held to ten in ten minutes by the cap: about 40 notes between midnight and 05:00, at roughly
+$0.03 each. These rows say nothing new. The gateway blocks them by reputation, the feed already
+lists the range, and the daily check mines the same sources and sends the flagged ones to
+block.
+
+**Decision.** An inbound detection (a public source, our address the destination) raises no
+live alert when its source is already in the feed (a member, or an address inside an `IP
+Range` row) or when its protection is a reputation verdict on the source (`Protection Type`
+"IP reputation", the row's `scope` naming the source, no named protection or attack). Both are
+counted in the morning brief as before. Everything else is unchanged: a LAN device reaching a
+feed member, an outbound detection (the gateway's own outbound traffic is logged with the WAN
+address as source, so the `scope` check keeps a verdict on its destination live), and an
+inbound detection with a named protection (an IPS signature, a scanner pattern) from a source
+not in the feed still alert live. The daily check is untouched: the quiet sources remain candidates
+for the feed.
+
+**Outcome.** Built 2026-10-31 in a worktree, test-first, and merged the same day; the bot
+restarted on the new rule.
+
 ## 5. Operating it
 
 - Is the system up? Send `/status` to the bot first: five lines, the receiver, the last daily
@@ -1021,3 +1052,6 @@ secret under Settings → Secrets and variables → Actions and deletes the old 
    count (`confirmed <date>` / `added unchecked <date>`), the public face names no lookup
    service, and `CONFIDENCE` stays as this feed's own band (D12). Left open under D12's known
    limits: the `vt-` row names, and the engine counts in the monthly workflow's public log.
+8. Done 2026-10-31: the first tuning under item 4. Inbound detections from a source already in
+   the feed, or blocked by IP reputation alone, no longer alert live; the brief counts them
+   (D13).

@@ -95,6 +95,31 @@ class WatcherTest(unittest.TestCase):
         # spark_logs' INBOUND_PREVENT: an IP-reputation row on a probe, logged with a blank Action.
         self.assertEqual(self.watcher.scan([INBOUND_PREVENT, STATS]), [])
 
+    def test_an_inbound_reputation_block_is_left_to_the_brief(self):
+        # A scanner the gateway blocks by IP reputation alone, hundreds a day: the brief counts it. The
+        # same row with a named protection is still an alert.
+        reputation = INBOUND_PREVENT.replace('Action=" "', 'Action="prevent"')
+
+        self.assertEqual(self.watcher.scan([reputation]), [])
+        self.assertEqual(self.watcher.scan([reputation.replace("IP reputation", "IP Reputation")]), [])
+        self.assertEqual(len(self.watcher.scan([INBOUND_PREVENTED])), 1)
+
+    def test_a_reputation_verdict_on_the_destination_still_alerts(self):
+        # The gateway's own outbound traffic is logged with the WAN address as source; the verdict's
+        # `scope` then names the destination, and an attack name without a protection name is a verdict
+        # on neither: both are alerts.
+        outbound = (INBOUND_PREVENT.replace('Action=" "', 'Action="prevent"').replace('src="31.14.32.6"', 'src="185.1.3.47"')
+                    .replace('dst="185.1.3.47"', 'dst="31.14.32.6"'))  # scope stays 31.14.32.6, now the destination
+        named = INBOUND_PREVENT.replace('Action=" "', 'Action="prevent"').replace('Protection Name=""', 'attack="Scanner"')
+
+        self.assertEqual(self.summary(self.watcher.scan([outbound])), [("detection", "31.14.32.6", "185.1.3.47", "prevent")])
+        self.assertEqual(len(self.watcher.scan([named])), 1)
+
+    def test_an_inbound_detection_from_a_feed_member_is_left_to_the_brief(self):
+        for source in ("93.152.221.36", "45.155.205.233"):  # a member; an address inside an IP Range row
+            with self.subTest(source=source):
+                self.assertEqual(self.watcher.scan([INBOUND_PREVENTED.replace("185.1.2.66", source)]), [])
+
     def test_a_detection_of_a_lan_device_reaching_out_alerts(self):
         self.assertEqual([(a.kind, a.indicator, a.action) for a in self.watcher.scan([OUTBOUND_DETECTED])],
                          [("detection", "104.18.32.47", "detect")])

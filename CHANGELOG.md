@@ -42,6 +42,9 @@ All notable changes to this feed are recorded here.
   reply names the line to fix. See the README, "Format", and `docs/system-design.md`, D8.
 
 ### Changed
+- Live alerts no longer go out for an inbound Threat Prevention row whose source is already in
+  the feed or that the gateway blocked by IP reputation alone; the morning brief counts them
+  as before. One scanner range in the feed had produced dozens of alerts a night. Design D13.
 - The feed names no lookup service: a row's closing note is `confirmed <date>` or `added unchecked
   <date>` (the engine count left the comment; `CONFIDENCE` is unchanged), 46 rows that credited one
   research outlet say `External report`, and the lint refuses a comment that names a service (the

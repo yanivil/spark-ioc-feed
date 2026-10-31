@@ -34,6 +34,9 @@ SUPPRESSED_LISTED = 10  # (device → indicator, action) pairs the suppression s
 # A Threat Prevention row alerts live only with one of these actions (stripped, lower-cased); a blank
 # Action, monitor, accept, inspect and the rest are the morning brief's alone.
 ALERT_ACTIONS = frozenset({"prevent", "drop", "reject", "block", "detect"})
+# An inbound detection with only one of these Protection Types (lower-cased) is the gateway blocking a
+# known scanner by reputation: counted in the brief, never a live alert (D13).
+QUIET_INBOUND_TYPES = frozenset({"ip reputation"})
 # The blades whose outbound detection names attacker infrastructure: its alert gets a note on the
 # destination (an IPS/SmartDefense protocol anomaly does not). "Anti Malware" is the Spark's name for
 # the Anti-Virus and Anti-Bot family.
@@ -112,6 +115,22 @@ def _external(entry):
         if ip is not None and ip.is_global:
             return str(ip), _address(other)
     return None
+
+
+def _quiet_inbound(entry, external, feed):
+    """True for an inbound detection the brief counts and the live watcher leaves alone (D13): its
+    source is already in the feed, or the protection is a reputation verdict on the source alone
+    (QUIET_INBOUND_TYPES, the row's `scope` naming the source, no named protection or attack), the
+    gateway's own block of a known scanner, hundreds a day."""
+    if external != _address(entry["src"]):
+        return False
+    if external in feed:
+        return True
+    scope = entry.get("scope", "").strip()  # the address the verdict is about; the gateway's own outbound
+    if scope and _address(scope) != external:  # traffic is logged with the WAN address as source
+        return False
+    return (not entry.get("Protection Name", "").strip() and not entry.get("attack", "").strip()
+            and entry.get("Protection Type", "").strip().lower() in QUIET_INBOUND_TYPES)
 
 
 def _note_target(entry, external):
@@ -203,8 +222,9 @@ class Watcher:
     """Follows today's capture in `capture_dir` and raises an Alert for a LAN device reaching a member
     of the feed `feed_loader()` returns ("feed") and for a Threat Prevention row whose Action is one of
     ALERT_ACTIONS (prevent, drop, reject, block, detect) on traffic with a public address ("detection";
-    a blank Action, monitor, accept, anything else and the LAN-only rows are left to the morning
-    brief). The same pair is alerted at most once per `cooldown` seconds of `clock`. Each Alert names
+    a blank Action, monitor, accept, anything else, the LAN-only rows and the inbound rows
+    _quiet_inbound() names are left to the morning brief). The same pair is alerted at most once per
+    `cooldown` seconds of `clock`. Each Alert names
     the indicator its note is about: a feed hit's, an inbound detection's source, an outbound
     Anti-Bot, Anti-Virus or Threat Emulation detection's destination. gate() holds the alerts to
     ALERT_LIMIT in ALERT_WINDOW seconds (a Notice says when the cap is reached and, once the window
@@ -277,7 +297,7 @@ class Watcher:
                     return alert, ("feed", device, target)
         if spark_logs.is_tp_detection(entry) and action.lower() in ALERT_ACTIONS:
             ends = _external(entry)
-            if ends:  # a detection between two LAN addresses is left to the brief
+            if ends and not _quiet_inbound(entry, ends[0], self.feed):  # LAN-only and known scanners: the brief's
                 external, device = ends
                 key = ("detection", entry["src"], entry["dst"], _protection(entry))
                 note = _note_target(entry, external)

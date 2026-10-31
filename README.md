@@ -499,7 +499,9 @@ Two things alert, each as one message:
   A Threat Prevention row alerts only when its Action, whatever its case, is `prevent`, `drop`,
   `reject`, `block` or `detect`, and one of its two addresses is public. A blank Action,
   `monitor`, `accept`, `inspect` and any other, and rows between two LAN addresses, are counted
-  in the morning brief and raise no alert. Text from the capture (the protection, the action,
+  in the morning brief and raise no alert. So is an inbound row whose source is already in the
+  feed, whatever the protection, or that the gateway blocked by an IP-reputation verdict on the
+  source alone (no named protection): known scanners, hundreds a day, nothing new to say. Text from the capture (the protection, the action,
   the services, a source or destination that is not an address) reaches an alert or a note on
   one line of at most 100 characters, without control, bidi or zero-width characters. The
   Spark's system log lines never alert.
